@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
@@ -18,14 +18,17 @@ import { AiChat } from "./ai-chat"
 import { FileList } from "./file-list"
 
 const initialFiles = {
-  "document-1.md": `Welcome to your Personal AI Workspace. This is a text document editor. You can write notes, draft articles, or brainstorm ideas here. Use the AI tools below to enhance your writing.`,
-  "spreadsheet-1.csv": `id,Product,Quantity,Price
+  "notes.md": `Welcome to your Personal AI Workspace. This is a text document editor. You can write notes, draft articles, or brainstorm ideas here. Use the AI tools below to enhance your writing.`,
+  "sales-data.csv": `id,Product,Quantity,Price
 1,"Laptop",12,1200
 2,"Mouse",75,25
 3,"Keyboard",30,75
 4,"Monitor",20,300
 5,"Webcam",50,50`,
 };
+
+const newDocTemplate = `# New Document\n\nStart writing here...`;
+const newSheetTemplate = `Column A,Column B,Column C\nValue 1,Value 2,Value 3`;
 
 // CSV Helper Functions
 const toCSV = (data: Record<string, any>[]): string => {
@@ -61,10 +64,28 @@ const fromCSV = (csv: string): Record<string, any>[] => {
 
 export function Workspace() {
   const { toast } = useToast()
-  const [files, setFiles] = useState(initialFiles)
-  const [savedFiles, setSavedFiles] = useState(initialFiles);
-  const [activeFile, setActiveFile] = useState<string | null>("document-1.md")
+  const [files, setFiles] = useState<Record<string, string>>({})
+  const [activeFile, setActiveFile] = useState<string | null>(null)
   
+  // Load files from localStorage on initial render
+  useEffect(() => {
+    try {
+      const savedFiles = localStorage.getItem("ai-workspace-files")
+      if (savedFiles) {
+        const parsedFiles = JSON.parse(savedFiles)
+        setFiles(parsedFiles);
+        setActiveFile(Object.keys(parsedFiles)[0] || null);
+      } else {
+        setFiles(initialFiles)
+        setActiveFile(Object.keys(initialFiles)[0] || null)
+      }
+    } catch (error) {
+        console.error("Failed to load files from localStorage", error)
+        setFiles(initialFiles)
+        setActiveFile(Object.keys(initialFiles)[0] || null)
+    }
+  }, [])
+
   const activeContent = activeFile ? files[activeFile] : "";
   const isDocument = activeFile?.endsWith('.md');
   const isSpreadsheet = activeFile?.endsWith('.csv');
@@ -85,8 +106,13 @@ export function Workspace() {
   };
 
   const handleSave = () => {
-    setSavedFiles(files);
-    toast({ title: "Saved!", description: "Your files have been saved." });
+    try {
+        localStorage.setItem("ai-workspace-files", JSON.stringify(files));
+        toast({ title: "Saved!", description: "Your files have been saved to this browser." });
+    } catch (error) {
+        console.error("Failed to save files to localStorage", error);
+        toast({ variant: "destructive", title: "Error", description: "Could not save files. Your browser's storage might be full." });
+    }
   };
   
   const handleExport = () => {
@@ -104,6 +130,47 @@ export function Workspace() {
     toast({ title: "Exported!", description: `${activeFile} has been downloaded.` });
   };
 
+  const handleFileCreate = (fileName: string, type: 'document' | 'spreadsheet'): boolean => {
+    if (files[fileName]) {
+        return false // File already exists
+    }
+    const newContent = type === 'document' ? newDocTemplate : newSheetTemplate
+    setFiles(prev => ({ ...prev, [fileName]: newContent }))
+    setActiveFile(fileName)
+    return true
+  }
+
+  const handleFileDelete = (fileName: string) => {
+    const newFiles = { ...files }
+    delete newFiles[fileName]
+    
+    if (activeFile === fileName) {
+        const nextFile = Object.keys(newFiles)[0] || null
+        setActiveFile(nextFile)
+    }
+    setFiles(newFiles)
+  }
+
+  const handleFileRename = (oldName: string, newName: string): boolean => {
+    if (files[newName] && oldName !== newName) {
+        return false // New file name already exists
+    }
+    const newFiles: Record<string, string> = {}
+    Object.keys(files).forEach(key => {
+        if (key === oldName) {
+            newFiles[newName] = files[oldName]
+        } else {
+            newFiles[key] = files[key]
+        }
+    })
+    setFiles(newFiles)
+    if (activeFile === oldName) {
+        setActiveFile(newName)
+    }
+    return true
+  }
+
+
   const handleSpreadsheetCellChange = (rowIndex: number, header: string, value: string | number) => {
     if (activeFile && isSpreadsheet) {
       const newData = [...spreadsheetData];
@@ -114,10 +181,18 @@ export function Workspace() {
 
   const handleHeaderChange = (oldHeader: string, newHeader: string) => {
     if (!isSpreadsheet || !newHeader || oldHeader === newHeader) return;
+    
+    // Check for duplicate new header name
+    const oldHeaders = spreadsheetHeaders;
+    if(oldHeaders.includes(newHeader)) {
+        toast({ variant: "destructive", title: "Error", description: "Column names must be unique." });
+        // NOTE: We don't have a good way to revert the input field value here,
+        // the user must manually correct it. A more complex state management for the input would be needed.
+        return;
+    }
 
     const newData = spreadsheetData.map(row => {
       const newRow = { ...row };
-      // Create a new object with the new key
       const updatedRow: Record<string, any> = {};
       Object.keys(newRow).forEach(key => {
         if (key === oldHeader) {
@@ -128,19 +203,7 @@ export function Workspace() {
       });
       return updatedRow;
     });
-
-    // Reorder headers to keep consistency
-    const oldHeaders = spreadsheetHeaders;
-    const newHeaders = oldHeaders.map(h => h === oldHeader ? newHeader : h);
-    const reorderedData = newData.map(row => {
-        const reorderedRow: Record<string, any> = {};
-        newHeaders.forEach(header => {
-            reorderedRow[header] = row[header];
-        });
-        return reorderedRow;
-    });
-
-    updateActiveContent(toCSV(reorderedData));
+    updateActiveContent(toCSV(newData));
   };
   
   const handleCorrectGrammar = async () => {
@@ -188,7 +251,10 @@ export function Workspace() {
     setIsProcessing(true)
     toast({ title: "AI is thinking...", description: "Manipulating data." })
     try {
-      const result = await manipulateData({ spreadsheetData: activeContent, selectedRange: "A1:D6", instruction: manipulateInstruction })
+      // Find a reasonable range, for now just use the whole sheet
+      const range = spreadsheetData.length > 0 ? `A1:${String.fromCharCode(64 + Object.keys(spreadsheetData[0]).length)}${spreadsheetData.length + 1}` : 'A1:A1'
+
+      const result = await manipulateData({ spreadsheetData: activeContent, selectedRange: range, instruction: manipulateInstruction })
       updateActiveContent(result.manipulatedData)
       toast({ title: "Success", description: "Data manipulated successfully." })
     } catch (error) {
@@ -204,14 +270,22 @@ export function Workspace() {
   return (
     <div className="container mx-auto max-w-7xl px-4 py-8">
        <div className="flex justify-end gap-2 mb-4">
-        <Button onClick={handleSave}><Save /> Save Work</Button>
-        <Button onClick={handleExport} variant="outline"><Download /> Export File</Button>
+        <Button onClick={handleSave} disabled={Object.keys(files).length === 0}><Save /> Save Work</Button>
+        <Button onClick={handleExport} variant="outline" disabled={!activeFile}><Download /> Export File</Button>
       </div>
       <div className="grid gap-6 lg:grid-cols-12">
         <div className="lg:col-span-3">
-            <FileList files={Object.keys(files)} activeFile={activeFile} onFileSelect={setActiveFile} />
+            <FileList 
+                files={Object.keys(files).sort()} 
+                activeFile={activeFile} 
+                onFileSelect={setActiveFile}
+                onFileCreate={handleFileCreate}
+                onFileDelete={handleFileDelete}
+                onFileRename={handleFileRename}
+            />
         </div>
         <div className="lg:col-span-9">
+         {activeFile ? (
           <Tabs value={isDocument ? "document" : "spreadsheet"} className="w-full">
             <TabsList className="grid w-full grid-cols-2">
               <TabsTrigger value="document" disabled={!isDocument}><FileText />Document</TabsTrigger>
@@ -223,7 +297,7 @@ export function Workspace() {
                 <div className="lg:col-span-3">
                   <Card>
                     <CardHeader>
-                      <CardTitle>Document Editor</CardTitle>
+                      <CardTitle>{activeFile}</CardTitle>
                       <CardDescription>Edit your text document. Use the AI tools to enhance your writing.</CardDescription>
                     </CardHeader>
                     <CardContent>
@@ -285,13 +359,13 @@ export function Workspace() {
                 <div className="lg:col-span-3">
                   <Card>
                     <CardHeader>
-                      <CardTitle>Spreadsheet</CardTitle>
+                      <CardTitle>{activeFile}</CardTitle>
                       <CardDescription>Click on a cell or header to edit its value.</CardDescription>
                     </CardHeader>
                     <CardContent>
-                      <div className="relative w-full overflow-auto rounded-md border">
+                      <div className="relative w-full overflow-auto rounded-md border max-h-[500px]">
                         <Table>
-                          <TableHeader>
+                          <TableHeader className="sticky top-0 bg-background z-10">
                             <TableRow>
                               {spreadsheetHeaders.map(header => (
                                 <TableHead key={header}>
@@ -299,7 +373,7 @@ export function Workspace() {
                                     type="text"
                                     defaultValue={header}
                                     onBlur={(e) => handleHeaderChange(header, e.target.value)}
-                                    className="h-8 border-transparent font-bold focus:border-ring focus:bg-secondary"
+                                    className="h-8 border-transparent font-bold focus:border-ring focus:bg-secondary p-2"
                                     disabled={!isSpreadsheet}
                                   />
                                 </TableHead>
@@ -310,12 +384,12 @@ export function Workspace() {
                             {spreadsheetData.map((row, rowIndex) => (
                               <TableRow key={rowIndex}>
                                 {spreadsheetHeaders.map(header => (
-                                  <TableCell key={header}>
+                                  <TableCell key={header} className="p-1">
                                     <Input
                                       type={typeof row[header] === 'number' ? 'number' : 'text'}
                                       value={row[header]}
                                       onChange={(e) => handleSpreadsheetCellChange(rowIndex, header, e.target.value)}
-                                      className="h-8 border-transparent focus:border-ring focus:bg-secondary"
+                                      className="h-8 border-transparent focus:border-ring focus:bg-secondary p-2"
                                       disabled={!isSpreadsheet}
                                     />
                                   </TableCell>
@@ -325,6 +399,11 @@ export function Workspace() {
                           </TableBody>
                         </Table>
                       </div>
+                       {spreadsheetData.length === 0 && (
+                        <div className="text-center p-8 text-muted-foreground">
+                            This spreadsheet is empty.
+                        </div>
+                       )}
                     </CardContent>
                   </Card>
                 </div>
@@ -351,10 +430,16 @@ export function Workspace() {
               </div>
             </TabsContent>
           </Tabs>
+         ) : (
+            <Card className="flex items-center justify-center h-96">
+                <CardContent className="text-center">
+                    <p className="text-xl font-medium">Welcome to your workspace!</p>
+                    <p className="text-muted-foreground">Create a new file from the list on the left to get started.</p>
+                </CardContent>
+            </Card>
+         )}
         </div>
       </div>
     </div>
   )
 }
-
-    
