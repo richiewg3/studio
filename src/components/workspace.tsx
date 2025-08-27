@@ -16,9 +16,12 @@ import { rewriteDocument } from "@/ai/flows/rewrite-document"
 import { manipulateData } from "@/ai/flows/data-manipulation"
 import { AiChat } from "./ai-chat"
 import { FileList } from "./file-list"
+import { Skeleton } from "./ui/skeleton"
+import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "./ui/tooltip"
 
 const initialFiles = {
-  "notes.md": `Welcome to your Personal AI Workspace. This is a text document editor. You can write notes, draft articles, or brainstorm ideas here. Use the AI tools below to enhance your writing.`,
+  "notes.md": `# Welcome to your Personal AI Workspace
+This is a text document editor. You can write notes, draft articles, or brainstorm ideas here. Use the AI tools below to enhance your writing.`,
   "sales-data.csv": `id,Product,Quantity,Price
 1,"Laptop",12,1200
 2,"Mouse",75,25
@@ -50,12 +53,21 @@ const toCSV = (data: Record<string, any>[]): string => {
 const fromCSV = (csv: string): Record<string, any>[] => {
   const lines = csv.split('\n').filter(line => line.trim() !== '');
   if (lines.length < 2) return [];
-  const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
+  // Ensure we handle trailing commas in header
+  const headersRaw = lines[0].split(',');
+  const headers = headersRaw.map(h => h.trim().replace(/"/g, ''));
+  
   return lines.slice(1).map(line => {
-    const values = line.match(/(".*?"|[^",]+)(?=\s*,|\s*$)/g) || line.split(',');
+    // This regex is more robust for CSV parsing
+    const values = line.match(/(".*?"|[^",]+)(?=\s*,|\s*$)/g) || [];
     return headers.reduce((obj, header, index) => {
-      const value = values[index] ? values[index].trim().replace(/"/g, '') : "";
-      obj[header] = isNaN(Number(value)) || value === "" ? value : Number(value);
+      if (header) { // Only process if header is not empty
+        const valueRaw = values[index] ? values[index].trim() : "";
+        const value = valueRaw.startsWith('"') && valueRaw.endsWith('"') 
+            ? valueRaw.slice(1, -1).replace(/""/g, '"') 
+            : valueRaw;
+        obj[header] = isNaN(Number(value)) || value === "" ? value : Number(value);
+      }
       return obj;
     }, {} as Record<string, any>);
   });
@@ -66,23 +78,29 @@ export function Workspace() {
   const { toast } = useToast()
   const [files, setFiles] = useState<Record<string, string>>({})
   const [activeFile, setActiveFile] = useState<string | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
   
   // Load files from localStorage on initial render
   useEffect(() => {
     try {
-      const savedFiles = localStorage.getItem("ai-workspace-files")
-      if (savedFiles) {
-        const parsedFiles = JSON.parse(savedFiles)
-        setFiles(parsedFiles);
-        setActiveFile(Object.keys(parsedFiles)[0] || null);
-      } else {
-        setFiles(initialFiles)
-        setActiveFile(Object.keys(initialFiles)[0] || null)
-      }
+      // Simulate a small delay for loading
+      setTimeout(() => {
+        const savedFiles = localStorage.getItem("ai-workspace-files")
+        if (savedFiles && Object.keys(JSON.parse(savedFiles)).length > 0) {
+            const parsedFiles = JSON.parse(savedFiles)
+            setFiles(parsedFiles);
+            setActiveFile(Object.keys(parsedFiles)[0] || null);
+        } else {
+            setFiles(initialFiles)
+            setActiveFile(Object.keys(initialFiles)[0] || null)
+        }
+        setIsLoading(false)
+      }, 500);
     } catch (error) {
         console.error("Failed to load files from localStorage", error)
         setFiles(initialFiles)
         setActiveFile(Object.keys(initialFiles)[0] || null)
+        setIsLoading(false)
     }
   }, [])
 
@@ -182,11 +200,10 @@ export function Workspace() {
   };
 
   const handleHeaderChange = (oldHeader: string, newHeader: string) => {
-    if (!isSpreadsheet || !newHeader || oldHeader === newHeader) return;
+    if (!isSpreadsheet || !newHeader.trim() || oldHeader === newHeader) return;
     
-    // Check for duplicate new header name
     const oldHeaders = spreadsheetHeaders;
-    if(oldHeaders.includes(newHeader)) {
+    if(oldHeaders.includes(newHeader.trim())) {
         toast({ variant: "destructive", title: "Error", description: "Column names must be unique." });
         return;
     }
@@ -196,7 +213,7 @@ export function Workspace() {
       const updatedRow: Record<string, any> = {};
       Object.keys(newRow).forEach(key => {
         if (key === oldHeader) {
-          updatedRow[newHeader] = newRow[key];
+          updatedRow[newHeader.trim()] = newRow[key];
         } else {
           updatedRow[key] = newRow[key];
         }
@@ -216,23 +233,27 @@ export function Workspace() {
       }, {} as Record<string, any>);
       updateActiveContent(toCSV([...spreadsheetData, newRow]));
     } else {
-      // Handle empty sheet case
-      const headers = activeContent.split('\n')[0].split(',');
-      const newRow = headers.reduce((acc, key) => {
-        acc[key] = "";
-        return acc;
-      }, {} as Record<string, any>);
-      updateActiveContent(toCSV([newRow]));
+      const headers = spreadsheetHeaders.filter(h => h);
+      if (headers.length > 0) {
+        const newRow = headers.reduce((acc, key) => {
+          acc[key] = "";
+          return acc;
+        }, {} as Record<string, any>);
+        updateActiveContent(toCSV([newRow]));
+      } else {
+        toast({variant: "destructive", title: "Cannot add row", description: "Add a column first to start building your sheet."})
+      }
     }
     toast({ title: "Row Added" });
   };
 
   const handleAddColumn = () => {
-    if (!isSpreadsheet || !newColumnName.trim()) {
+    const trimmedName = newColumnName.trim()
+    if (!isSpreadsheet || !trimmedName) {
       toast({ variant: "destructive", title: "Error", description: "Column name cannot be empty." });
       return;
     }
-    if (spreadsheetHeaders.includes(newColumnName.trim())) {
+    if (spreadsheetHeaders.includes(trimmedName)) {
       toast({ variant: "destructive", title: "Error", description: "Column name must be unique." });
       return;
     }
@@ -240,19 +261,18 @@ export function Workspace() {
     if (spreadsheetData.length > 0) {
         const newData = spreadsheetData.map(row => ({
             ...row,
-            [newColumnName.trim()]: ""
+            [trimmedName]: ""
         }));
         updateActiveContent(toCSV(newData));
     } else {
-        // Handle empty sheet
-        const existingHeaders = activeContent.split('\n')[0];
-        const newHeaders = existingHeaders ? `${existingHeaders},${newColumnName.trim()}` : newColumnName.trim();
+        const existingHeaders = spreadsheetHeaders.filter(h => h);
+        const newHeaders = [...existingHeaders, trimmedName].join(',');
         updateActiveContent(`${newHeaders}\n`);
     }
 
     setNewColumnName("");
     setAddColumnDialogOpen(false);
-    toast({ title: "Column Added", description: `Column "${newColumnName.trim()}" was added.` });
+    toast({ title: "Column Added", description: `Column "${trimmedName}" was added.` });
   };
   
   const handleCorrectGrammar = async () => {
@@ -314,14 +334,47 @@ export function Workspace() {
     }
   }
   
-  const spreadsheetHeaders = activeContent.split('\n')[0].split(',').filter(h => h);
+  const spreadsheetHeaders = activeContent.split('\n')[0].split(',').map(h => h.trim());
 
+  if (isLoading) {
+    return (
+        <div className="container mx-auto max-w-7xl px-4 py-8">
+            <div className="flex justify-end gap-2 mb-4">
+                <Skeleton className="h-10 w-32" />
+                <Skeleton className="h-10 w-36" />
+            </div>
+            <div className="grid gap-6 lg:grid-cols-12">
+                <div className="lg:col-span-3">
+                    <Skeleton className="h-[300px] w-full" />
+                </div>
+                <div className="lg:col-span-9">
+                    <Skeleton className="h-[600px] w-full" />
+                </div>
+            </div>
+        </div>
+    )
+  }
 
   return (
+    <TooltipProvider>
     <div className="container mx-auto max-w-7xl px-4 py-8">
        <div className="flex justify-end gap-2 mb-4">
-        <Button onClick={handleSave} disabled={Object.keys(files).length === 0}><Save /> Save Work</Button>
-        <Button onClick={handleExport} variant="outline" disabled={!activeFile}><Download /> Export File</Button>
+        <Tooltip>
+            <TooltipTrigger asChild>
+                <Button onClick={handleSave} disabled={Object.keys(files).length === 0}><Save /> Save Work</Button>
+            </TooltipTrigger>
+            <TooltipContent>
+                <p>Save all files to your browser's local storage.</p>
+            </TooltipContent>
+        </Tooltip>
+        <Tooltip>
+            <TooltipTrigger asChild>
+                <Button onClick={handleExport} variant="outline" disabled={!activeFile}><Download /> Export File</Button>
+            </TooltipTrigger>
+            <TooltipContent>
+                <p>Download the current file to your computer.</p>
+            </TooltipContent>
+        </Tooltip>
       </div>
       <div className="grid gap-6 lg:grid-cols-12">
         <div className="lg:col-span-3">
@@ -417,14 +470,15 @@ export function Workspace() {
                         <Table>
                           <TableHeader className="sticky top-0 bg-background z-10">
                             <TableRow>
-                              {spreadsheetHeaders.map(header => (
-                                <TableHead key={header}>
+                              {spreadsheetHeaders.map((header, index) => (
+                                <TableHead key={`${header}-${index}`}>
                                    <Input
                                     type="text"
                                     defaultValue={header}
                                     onBlur={(e) => handleHeaderChange(header, e.target.value)}
                                     className="h-8 border-transparent font-bold focus:border-ring focus:bg-secondary p-2"
                                     disabled={!isSpreadsheet}
+                                    placeholder="Enter column name..."
                                   />
                                 </TableHead>
                               ))}
@@ -433,16 +487,18 @@ export function Workspace() {
                           <TableBody>
                             {spreadsheetData.map((row, rowIndex) => (
                               <TableRow key={rowIndex}>
-                                {spreadsheetHeaders.map(header => (
-                                  <TableCell key={header} className="p-1">
+                                {spreadsheetHeaders.map((header, colIndex) => (
+                                  header ? ( // Render cell only if header is not empty
+                                  <TableCell key={`${header}-${rowIndex}-${colIndex}`} className="p-1">
                                     <Input
                                       type={typeof row[header] === 'number' ? 'number' : 'text'}
-                                      value={row[header]}
+                                      value={row[header] || ''}
                                       onChange={(e) => handleSpreadsheetCellChange(rowIndex, header, e.target.value)}
                                       className="h-8 border-transparent focus:border-ring focus:bg-secondary p-2"
                                       disabled={!isSpreadsheet}
                                     />
                                   </TableCell>
+                                  ) : null
                                 ))}
                               </TableRow>
                             ))}
@@ -451,17 +507,17 @@ export function Workspace() {
                       </div>
                        {(spreadsheetData.length === 0 && spreadsheetHeaders.length > 0 && spreadsheetHeaders[0] !== "") && (
                         <div className="text-center p-8 text-muted-foreground">
-                            This spreadsheet is empty. Add a row to get started.
+                            This sheet is empty. Add a new row to get started.
                         </div>
                        )}
                        {spreadsheetHeaders.length === 0 || (spreadsheetHeaders.length === 1 && spreadsheetHeaders[0] === "") && (
                         <div className="text-center p-8 text-muted-foreground">
-                           This spreadsheet is empty. Add a column to get started.
+                           This sheet has no columns. Add a column to begin.
                         </div>
                        )}
                     </CardContent>
                      <CardFooter className="flex-wrap gap-2">
-                        <Button onClick={handleAddRow} disabled={!isSpreadsheet || spreadsheetHeaders.length === 0 || (spreadsheetHeaders.length === 1 && spreadsheetHeaders[0] === "")}>
+                        <Button onClick={handleAddRow} disabled={!isSpreadsheet || spreadsheetHeaders.length === 0 || spreadsheetHeaders.every(h => !h)}>
                             <Plus /> Add Row
                         </Button>
                         <Dialog open={isAddColumnDialogOpen} onOpenChange={setAddColumnDialogOpen}>
@@ -481,7 +537,7 @@ export function Workspace() {
                                         value={newColumnName} 
                                         onChange={e => setNewColumnName(e.target.value)} 
                                         onKeyDown={e => e.key === 'Enter' && handleAddColumn()}
-                                        placeholder="e.g., Email"
+                                        placeholder="e.g., Email Address"
                                     />
                                 </div>
                                 <DialogFooter>
@@ -501,11 +557,11 @@ export function Workspace() {
                         <CardContent>
                             <div className="grid gap-2">
                                <Label htmlFor="manipulate-instruction">Instruction</Label>
-                               <Input id="manipulate-instruction" placeholder="e.g., sort by price descending" value={manipulateInstruction} onChange={e => setManipulateInstruction(e.target.value)} disabled={!isSpreadsheet} />
+                               <Input id="manipulate-instruction" placeholder="e.g., sort by price descending" value={manipulateInstruction} onChange={e => setManipulateInstruction(e.target.value)} disabled={!isSpreadsheet || spreadsheetData.length === 0} />
                             </div>
                         </CardContent>
                         <CardFooter>
-                            <Button onClick={handleManipulateData} disabled={isProcessing || !isSpreadsheet} className="w-full">
+                            <Button onClick={handleManipulateData} disabled={isProcessing || !isSpreadsheet || spreadsheetData.length === 0} className="w-full">
                                 {isProcessing ? <Loader2 className="animate-spin" /> : <Sparkles />}
                                 Apply Manipulation
                             </Button>
@@ -516,15 +572,16 @@ export function Workspace() {
             </TabsContent>
           </Tabs>
          ) : (
-            <Card className="flex items-center justify-center h-96">
+            <Card className="flex items-center justify-center h-96 border-dashed">
                 <CardContent className="text-center p-6">
-                    <p className="text-xl font-medium">Welcome to your workspace!</p>
-                    <p className="text-muted-foreground">Create a new file from the list on the left to get started.</p>
+                    <h2 className="text-2xl font-semibold mb-2">Welcome to Your Workspace!</h2>
+                    <p className="text-muted-foreground">Select a file from the list on the left, or create a new one to get started.</p>
                 </CardContent>
             </Card>
          )}
         </div>
       </div>
     </div>
+    </TooltipProvider>
   )
 }
