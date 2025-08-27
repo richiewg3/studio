@@ -329,11 +329,11 @@ export function Workspace() {
     }
   }
   
-  const spreadsheetHeaders = activeContent.split('\n')[0].split(',').map(h => h.trim());
+  const spreadsheetHeaders = activeContent ? (activeContent.split('\n')[0] || '').split(',').map(h => h.trim()) : [];
 
   if (isLoading) {
     return (
-        <div className="container mx-auto max-w-7xl px-4 py-8">
+        <div className="container mx-auto max-w-screen-2xl px-4 py-8">
             <div className="flex justify-end gap-2 mb-4">
                 <Skeleton className="h-10 w-32" />
                 <Skeleton className="h-10 w-36" />
@@ -352,7 +352,7 @@ export function Workspace() {
 
   return (
     <TooltipProvider>
-    <div className="container mx-auto max-w-7xl px-4 py-8">
+    <div className="container mx-auto max-w-screen-2xl px-4 py-8">
        <div className="flex justify-end gap-2 mb-4">
         <Tooltip>
             <TooltipTrigger asChild>
@@ -391,8 +391,8 @@ export function Workspace() {
             </TabsList>
             
             <TabsContent value="document" className="mt-4">
-              <div className="grid gap-6 lg:grid-cols-5">
-                <div className="lg:col-span-3">
+              <div className="grid gap-6 md:grid-cols-5">
+                <div className="md:col-span-3">
                   <Card>
                     <CardHeader>
                       <CardTitle>{activeFile}</CardTitle>
@@ -442,7 +442,7 @@ export function Workspace() {
                     </CardFooter>
                   </Card>
                 </div>
-                <div className="lg:col-span-2">
+                <div className="md:col-span-2">
                   <AiChat 
                     documentContent={activeContent} 
                     onApplyChanges={updateActiveContent} 
@@ -453,8 +453,8 @@ export function Workspace() {
             </TabsContent>
             
             <TabsContent value="spreadsheet" className="mt-4">
-              <div className="grid gap-6 lg:grid-cols-5">
-                <div className="lg:col-span-3">
+              <div className="grid gap-6 md:grid-cols-5">
+                <div className="md:col-span-3">
                   <Card>
                     <CardHeader>
                       <CardTitle>{activeFile}</CardTitle>
@@ -505,7 +505,7 @@ export function Workspace() {
                             This sheet is empty. Add a new row to get started.
                         </div>
                        )}
-                       {spreadsheetHeaders.length === 0 || (spreadsheetHeaders.length === 1 && spreadsheetHeaders[0] === "") && (
+                       {(spreadsheetHeaders.length === 0 || (spreadsheetHeaders.length === 1 && spreadsheetHeaders[0] === "")) && (
                         <div className="text-center p-8 text-muted-foreground">
                            This sheet has no columns. Add a column to begin.
                         </div>
@@ -543,7 +543,7 @@ export function Workspace() {
                     </CardFooter>
                   </Card>
                 </div>
-                <div className="lg:col-span-2 flex flex-col gap-6">
+                <div className="md:col-span-2 flex flex-col gap-6">
                     <Card>
                         <CardHeader>
                             <CardTitle className="flex items-center gap-2"><BrainCircuit /> Manipulate Data</CardTitle>

@@ -111,22 +111,22 @@ export function FileList({ files, activeFile, onFileSelect, onFileCreate, onFile
                   className={cn("w-full justify-start flex-grow", activeFile === file && "font-bold")}
                   onClick={() => onFileSelect(file)}
                 >
-                  {file.endsWith('.md') && <FileText className="mr-2" />}
-                  {file.endsWith('.csv') && <Table className="mr-2" />}
+                  {file.endsWith('.md') && <FileText className="mr-2 h-4 w-4" />}
+                  {file.endsWith('.csv') && <Table className="mr-2 h-4 w-4" />}
                   <span className="truncate">{file}</span>
                 </Button>
                 <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="opacity-0 group-hover:opacity-100 flex-shrink-0">
-                            <MoreVertical />
+                        <Button variant="ghost" size="icon" className="opacity-0 group-hover:opacity-100 flex-shrink-0 h-8 w-8">
+                            <MoreVertical className="h-4 w-4" />
                         </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent>
                         <DropdownMenuItem onSelect={() => handleRenamePrompt(file)}>
-                            <Pencil className="mr-2"/> Rename
+                            <Pencil className="mr-2 h-4 w-4"/> Rename
                         </DropdownMenuItem>
-                        <DropdownMenuItem onSelect={() => handleDeletePrompt(file)} className="text-destructive">
-                            <Trash2 className="mr-2"/> Delete
+                        <DropdownMenuItem onSelect={() => handleDeletePrompt(file)} className="text-destructive focus:text-destructive focus:bg-destructive/10">
+                            <Trash2 className="mr-2 h-4 w-4"/> Delete
                         </DropdownMenuItem>
                     </DropdownMenuContent>
                 </DropdownMenu>

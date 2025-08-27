@@ -14,8 +14,8 @@
     --popover: 240 100% 99%;
     --popover-foreground: 240 10% 3.9%;
 
-    --primary: 240 100% 94%; /* Soft lavender */
-    --primary-foreground: 240 10% 3.9%;
+    --primary: 262 80% 96%; /* Lighter lavender for primary */
+    --primary-foreground: 262 77% 30%; /* Darker violet for text on primary */
 
     --secondary: 240 60% 97%;
     --secondary-foreground: 240 10% 3.9%;
@@ -46,8 +46,8 @@
     --popover: 240 10% 10%;
     --popover-foreground: 210 40% 98%;
 
-    --primary: 240 100% 94%; /* Soft lavender */
-    --primary-foreground: 240 10% 3.9%;
+    --primary: 262 77% 66%; /* Muted blue-violet for primary in dark */
+    --primary-foreground: 210 40% 98%;
 
     --secondary: 240 10% 15%;
     --secondary-foreground: 210 40% 98%;
