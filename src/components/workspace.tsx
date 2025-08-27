@@ -14,7 +14,6 @@ import { BrainCircuit, FileText, Loader2, Sparkles, Table as TableIcon, Wand2 } 
 import { correctGrammar } from "@/ai/flows/correct-grammar"
 import { rewriteDocument } from "@/ai/flows/rewrite-document"
 import { manipulateData } from "@/ai/flows/data-manipulation"
-import { createFormula } from "@/ai/flows/create-formula"
 
 const initialDocumentContent = `Welcome to your Personal AI Workspace. This is a text document editor. You can write notes, draft articles, or brainstorm ideas here. Use the AI tools below to enhance your writing.`
 
@@ -57,8 +56,6 @@ export function Workspace() {
   const [isProcessing, setIsProcessing] = useState(false)
   const [rewriteInstruction, setRewriteInstruction] = useState("")
   const [manipulateInstruction, setManipulateInstruction] = useState("")
-  const [formulaDescription, setFormulaDescription] = useState("")
-  const [generatedFormula, setGeneratedFormula] = useState("")
   const [isRewriteDialogOpen, setRewriteDialogOpen] = useState(false)
 
   const handleCorrectGrammar = async () => {
@@ -110,25 +107,6 @@ export function Workspace() {
     } catch (error) {
         console.error(error)
       toast({ variant: "destructive", title: "Error", description: "Failed to manipulate data." })
-    } finally {
-      setIsProcessing(false)
-    }
-  }
-
-  const handleCreateFormula = async () => {
-    if (!formulaDescription) {
-        toast({ variant: "destructive", title: "Error", description: "Please provide a formula description." })
-        return
-    }
-    setIsProcessing(true)
-    toast({ title: "AI is thinking...", description: "Creating formula." })
-    try {
-      const headers = spreadsheetData.length > 0 ? Object.keys(spreadsheetData[0]) : []
-      const result = await createFormula({ description: formulaDescription, columnNames: headers })
-      setGeneratedFormula(result.formula)
-      toast({ title: "Success", description: "Formula created successfully." })
-    } catch (error) {
-      toast({ variant: "destructive", title: "Error", description: "Failed to create formula." })
     } finally {
       setIsProcessing(false)
     }
@@ -238,30 +216,6 @@ export function Workspace() {
                         <Button onClick={handleManipulateData} disabled={isProcessing} className="w-full">
                             {isProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2" />}
                             Apply Manipulation
-                        </Button>
-                    </CardFooter>
-                </Card>
-                 <Card>
-                    <CardHeader>
-                        <CardTitle className="flex items-center gap-2"><Wand2 />Create Formula</CardTitle>
-                        <CardDescription>Describe a calculation to generate a formula.</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="grid gap-2">
-                           <Label htmlFor="formula-description">Description</Label>
-                           <Input id="formula-description" placeholder="e.g., sum of all prices" value={formulaDescription} onChange={e => setFormulaDescription(e.target.value)} />
-                           {generatedFormula && (
-                            <div className="mt-2 rounded-md bg-muted p-3">
-                                <p className="text-sm font-semibold">Generated Formula:</p>
-                                <code className="text-sm font-mono text-primary">{generatedFormula}</code>
-                            </div>
-                           )}
-                        </div>
-                    </CardContent>
-                    <CardFooter>
-                        <Button onClick={handleCreateFormula} disabled={isProcessing} className="w-full">
-                            {isProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2" />}
-                            Generate Formula
                         </Button>
                     </CardFooter>
                 </Card>
