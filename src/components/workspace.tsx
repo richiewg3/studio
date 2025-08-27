@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useState, useEffect } from "react"
@@ -20,14 +21,8 @@ import { Skeleton } from "./ui/skeleton"
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "./ui/tooltip"
 
 const initialFiles = {
-  "notes.md": `# Welcome to your Personal AI Workspace
-This is a text document editor. You can write notes, draft articles, or brainstorm ideas here. Use the AI tools below to enhance your writing.`,
-  "sales-data.csv": `id,Product,Quantity,Price
-1,"Laptop",12,1200
-2,"Mouse",75,25
-3,"Keyboard",30,75
-4,"Monitor",20,300
-5,"Webcam",50,50`,
+  "notes.md": `# Welcome to your Personal AI Workspace\nThis is a text document editor. You can write notes, draft articles, or brainstorm ideas here. Use the AI tools below to enhance your writing.`,
+  "sales-data.csv": `id,Product,Quantity,Price\n1,"Laptop",12,1200\n2,"Mouse",75,25\n3,"Keyboard",30,75\n4,"Monitor",20,300\n5,"Webcam",50,50`,
 };
 
 const newDocTemplate = `# New Document\n\nStart writing here...`;
