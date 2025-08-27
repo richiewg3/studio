@@ -10,7 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/hooks/use-toast"
-import { BrainCircuit, Download, FileText, Loader2, Save, Sparkles, Table as TableIcon, Wand2 } from "lucide-react"
+import { BrainCircuit, Download, FileText, Loader2, Plus, Save, Sparkles, Table as TableIcon, Wand2 } from "lucide-react"
 import { correctGrammar } from "@/ai/flows/correct-grammar"
 import { rewriteDocument } from "@/ai/flows/rewrite-document"
 import { manipulateData } from "@/ai/flows/data-manipulation"
@@ -95,6 +95,8 @@ export function Workspace() {
   const [rewriteInstruction, setRewriteInstruction] = useState("")
   const [manipulateInstruction, setManipulateInstruction] = useState("")
   const [isRewriteDialogOpen, setRewriteDialogOpen] = useState(false)
+  const [isAddColumnDialogOpen, setAddColumnDialogOpen] = useState(false)
+  const [newColumnName, setNewColumnName] = useState("")
 
   const updateActiveContent = (newContent: string) => {
     if (activeFile) {
@@ -186,8 +188,6 @@ export function Workspace() {
     const oldHeaders = spreadsheetHeaders;
     if(oldHeaders.includes(newHeader)) {
         toast({ variant: "destructive", title: "Error", description: "Column names must be unique." });
-        // NOTE: We don't have a good way to revert the input field value here,
-        // the user must manually correct it. A more complex state management for the input would be needed.
         return;
     }
 
@@ -204,6 +204,55 @@ export function Workspace() {
       return updatedRow;
     });
     updateActiveContent(toCSV(newData));
+  };
+  
+    const handleAddRow = () => {
+    if (!isSpreadsheet) return;
+
+    if (spreadsheetData.length > 0) {
+      const newRow = Object.keys(spreadsheetData[0]).reduce((acc, key) => {
+        acc[key] = "";
+        return acc;
+      }, {} as Record<string, any>);
+      updateActiveContent(toCSV([...spreadsheetData, newRow]));
+    } else {
+      // Handle empty sheet case
+      const headers = activeContent.split('\n')[0].split(',');
+      const newRow = headers.reduce((acc, key) => {
+        acc[key] = "";
+        return acc;
+      }, {} as Record<string, any>);
+      updateActiveContent(toCSV([newRow]));
+    }
+    toast({ title: "Row Added" });
+  };
+
+  const handleAddColumn = () => {
+    if (!isSpreadsheet || !newColumnName.trim()) {
+      toast({ variant: "destructive", title: "Error", description: "Column name cannot be empty." });
+      return;
+    }
+    if (spreadsheetHeaders.includes(newColumnName.trim())) {
+      toast({ variant: "destructive", title: "Error", description: "Column name must be unique." });
+      return;
+    }
+
+    if (spreadsheetData.length > 0) {
+        const newData = spreadsheetData.map(row => ({
+            ...row,
+            [newColumnName.trim()]: ""
+        }));
+        updateActiveContent(toCSV(newData));
+    } else {
+        // Handle empty sheet
+        const existingHeaders = activeContent.split('\n')[0];
+        const newHeaders = existingHeaders ? `${existingHeaders},${newColumnName.trim()}` : newColumnName.trim();
+        updateActiveContent(`${newHeaders}\n`);
+    }
+
+    setNewColumnName("");
+    setAddColumnDialogOpen(false);
+    toast({ title: "Column Added", description: `Column "${newColumnName.trim()}" was added.` });
   };
   
   const handleCorrectGrammar = async () => {
@@ -265,7 +314,8 @@ export function Workspace() {
     }
   }
   
-  const spreadsheetHeaders = spreadsheetData.length > 0 ? Object.keys(spreadsheetData[0]) : []
+  const spreadsheetHeaders = activeContent.split('\n')[0].split(',').filter(h => h);
+
 
   return (
     <div className="container mx-auto max-w-7xl px-4 py-8">
@@ -399,12 +449,47 @@ export function Workspace() {
                           </TableBody>
                         </Table>
                       </div>
-                       {spreadsheetData.length === 0 && (
+                       {(spreadsheetData.length === 0 && spreadsheetHeaders.length > 0 && spreadsheetHeaders[0] !== "") && (
                         <div className="text-center p-8 text-muted-foreground">
-                            This spreadsheet is empty.
+                            This spreadsheet is empty. Add a row to get started.
+                        </div>
+                       )}
+                       {spreadsheetHeaders.length === 0 || (spreadsheetHeaders.length === 1 && spreadsheetHeaders[0] === "") && (
+                        <div className="text-center p-8 text-muted-foreground">
+                           This spreadsheet is empty. Add a column to get started.
                         </div>
                        )}
                     </CardContent>
+                     <CardFooter className="flex-wrap gap-2">
+                        <Button onClick={handleAddRow} disabled={!isSpreadsheet || spreadsheetHeaders.length === 0 || (spreadsheetHeaders.length === 1 && spreadsheetHeaders[0] === "")}>
+                            <Plus /> Add Row
+                        </Button>
+                        <Dialog open={isAddColumnDialogOpen} onOpenChange={setAddColumnDialogOpen}>
+                            <DialogTrigger asChild>
+                                <Button variant="outline" disabled={!isSpreadsheet}>
+                                    <Plus /> Add Column
+                                </Button>
+                            </DialogTrigger>
+                            <DialogContent>
+                                <DialogHeader>
+                                    <DialogTitle>Add New Column</DialogTitle>
+                                </DialogHeader>
+                                <div className="grid gap-4 py-4">
+                                    <Label htmlFor="new-column-name">Column Name</Label>
+                                    <Input 
+                                        id="new-column-name" 
+                                        value={newColumnName} 
+                                        onChange={e => setNewColumnName(e.target.value)} 
+                                        onKeyDown={e => e.key === 'Enter' && handleAddColumn()}
+                                        placeholder="e.g., Email"
+                                    />
+                                </div>
+                                <DialogFooter>
+                                    <Button onClick={handleAddColumn}>Add Column</Button>
+                                </DialogFooter>
+                            </DialogContent>
+                        </Dialog>
+                    </CardFooter>
                   </Card>
                 </div>
                 <div className="lg:col-span-2 flex flex-col gap-6">
@@ -432,7 +517,7 @@ export function Workspace() {
           </Tabs>
          ) : (
             <Card className="flex items-center justify-center h-96">
-                <CardContent className="text-center">
+                <CardContent className="text-center p-6">
                     <p className="text-xl font-medium">Welcome to your workspace!</p>
                     <p className="text-muted-foreground">Create a new file from the list on the left to get started.</p>
                 </CardContent>
