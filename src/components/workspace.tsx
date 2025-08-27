@@ -470,7 +470,7 @@ export function Workspace() {
                                     type="text"
                                     defaultValue={header}
                                     onBlur={(e) => handleHeaderChange(header, e.target.value)}
-                                    className="h-8 border-transparent font-bold focus:border-ring focus:bg-secondary p-2"
+                                    className="h-8 border-transparent font-bold focus:border-ring focus:bg-secondary p-2 min-w-[150px]"
                                     disabled={!isSpreadsheet}
                                     placeholder="Enter column name..."
                                   />
@@ -488,7 +488,7 @@ export function Workspace() {
                                       type={typeof row[header] === 'number' ? 'number' : 'text'}
                                       value={row[header] || ''}
                                       onChange={(e) => handleSpreadsheetCellChange(rowIndex, header, e.target.value)}
-                                      className="h-8 border-transparent focus:border-ring focus:bg-secondary p-2"
+                                      className="h-8 border-transparent focus:border-ring focus:bg-secondary p-2 min-w-[150px]"
                                       disabled={!isSpreadsheet}
                                     />
                                   </TableCell>
