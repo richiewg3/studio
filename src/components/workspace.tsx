@@ -10,7 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/hooks/use-toast"
-import { BrainCircuit, FileText, Loader2, PlusCircle, Sparkles, Table as TableIcon, Wand2 } from "lucide-react"
+import { BrainCircuit, Download, FileText, Loader2, Save, Sparkles, Table as TableIcon, Wand2 } from "lucide-react"
 import { correctGrammar } from "@/ai/flows/correct-grammar"
 import { rewriteDocument } from "@/ai/flows/rewrite-document"
 import { manipulateData } from "@/ai/flows/data-manipulation"
@@ -35,7 +35,6 @@ const toCSV = (data: Record<string, any>[]): string => {
     headers.join(','),
     ...data.map(row => headers.map(header => {
       const value = row[header];
-      // Stringify only if it contains commas, quotes, or newlines
       if (typeof value === 'string' && (value.includes(',') || value.includes('"') || value.includes('\n'))) {
         return `"${value.replace(/"/g, '""')}"`;
       }
@@ -50,8 +49,7 @@ const fromCSV = (csv: string): Record<string, any>[] => {
   if (lines.length < 2) return [];
   const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
   return lines.slice(1).map(line => {
-    // This is a simple parser; a robust solution would handle quotes and commas within fields
-    const values = line.split(','); 
+    const values = line.match(/(".*?"|[^",]+)(?=\s*,|\s*$)/g) || line.split(',');
     return headers.reduce((obj, header, index) => {
       const value = values[index] ? values[index].trim().replace(/"/g, '') : "";
       obj[header] = isNaN(Number(value)) || value === "" ? value : Number(value);
@@ -64,6 +62,7 @@ const fromCSV = (csv: string): Record<string, any>[] => {
 export function Workspace() {
   const { toast } = useToast()
   const [files, setFiles] = useState(initialFiles)
+  const [savedFiles, setSavedFiles] = useState(initialFiles);
   const [activeFile, setActiveFile] = useState<string | null>("document-1.md")
   
   const activeContent = activeFile ? files[activeFile] : "";
@@ -85,12 +84,63 @@ export function Workspace() {
     }
   };
 
+  const handleSave = () => {
+    setSavedFiles(files);
+    toast({ title: "Saved!", description: "Your files have been saved." });
+  };
+  
+  const handleExport = () => {
+    if (!activeFile || !activeContent) return;
+
+    const blob = new Blob([activeContent], { type: isDocument ? 'text/markdown' : 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = activeFile;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast({ title: "Exported!", description: `${activeFile} has been downloaded.` });
+  };
+
   const handleSpreadsheetCellChange = (rowIndex: number, header: string, value: string | number) => {
     if (activeFile && isSpreadsheet) {
       const newData = [...spreadsheetData];
       newData[rowIndex] = { ...newData[rowIndex], [header]: value };
       updateActiveContent(toCSV(newData));
     }
+  };
+
+  const handleHeaderChange = (oldHeader: string, newHeader: string) => {
+    if (!isSpreadsheet || !newHeader || oldHeader === newHeader) return;
+
+    const newData = spreadsheetData.map(row => {
+      const newRow = { ...row };
+      // Create a new object with the new key
+      const updatedRow: Record<string, any> = {};
+      Object.keys(newRow).forEach(key => {
+        if (key === oldHeader) {
+          updatedRow[newHeader] = newRow[key];
+        } else {
+          updatedRow[key] = newRow[key];
+        }
+      });
+      return updatedRow;
+    });
+
+    // Reorder headers to keep consistency
+    const oldHeaders = spreadsheetHeaders;
+    const newHeaders = oldHeaders.map(h => h === oldHeader ? newHeader : h);
+    const reorderedData = newData.map(row => {
+        const reorderedRow: Record<string, any> = {};
+        newHeaders.forEach(header => {
+            reorderedRow[header] = row[header];
+        });
+        return reorderedRow;
+    });
+
+    updateActiveContent(toCSV(reorderedData));
   };
   
   const handleCorrectGrammar = async () => {
@@ -153,6 +203,10 @@ export function Workspace() {
 
   return (
     <div className="container mx-auto max-w-7xl px-4 py-8">
+       <div className="flex justify-end gap-2 mb-4">
+        <Button onClick={handleSave}><Save /> Save Work</Button>
+        <Button onClick={handleExport} variant="outline"><Download /> Export File</Button>
+      </div>
       <div className="grid gap-6 lg:grid-cols-12">
         <div className="lg:col-span-3">
             <FileList files={Object.keys(files)} activeFile={activeFile} onFileSelect={setActiveFile} />
@@ -160,8 +214,8 @@ export function Workspace() {
         <div className="lg:col-span-9">
           <Tabs value={isDocument ? "document" : "spreadsheet"} className="w-full">
             <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="document" disabled={!isDocument}><FileText className="mr-2" />Document</TabsTrigger>
-              <TabsTrigger value="spreadsheet" disabled={!isSpreadsheet}><TableIcon className="mr-2" />Spreadsheet</TabsTrigger>
+              <TabsTrigger value="document" disabled={!isDocument}><FileText />Document</TabsTrigger>
+              <TabsTrigger value="spreadsheet" disabled={!isSpreadsheet}><TableIcon />Spreadsheet</TabsTrigger>
             </TabsList>
             
             <TabsContent value="document" className="mt-4">
@@ -184,13 +238,13 @@ export function Workspace() {
                     </CardContent>
                     <CardFooter className="flex-wrap gap-2">
                       <Button onClick={handleCorrectGrammar} disabled={isProcessing || !isDocument}>
-                        {isProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2" />}
+                        {isProcessing ? <Loader2 className="animate-spin" /> : <Sparkles />}
                         Correct Grammar
                       </Button>
                       <Dialog open={isRewriteDialogOpen} onOpenChange={setRewriteDialogOpen}>
                         <DialogTrigger asChild>
                           <Button variant="outline" disabled={isProcessing || !isDocument}>
-                            <Wand2 className="mr-2" />
+                            <Wand2 />
                             Rewrite
                           </Button>
                         </DialogTrigger>
@@ -207,7 +261,7 @@ export function Workspace() {
                           </div>
                           <DialogFooter>
                             <Button onClick={handleRewrite} disabled={isProcessing}>
-                                {isProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Wand2 className="mr-2" />}
+                                {isProcessing ? <Loader2 className="animate-spin" /> : <Wand2 />}
                                 Rewrite
                             </Button>
                           </DialogFooter>
@@ -232,14 +286,24 @@ export function Workspace() {
                   <Card>
                     <CardHeader>
                       <CardTitle>Spreadsheet</CardTitle>
-                      <CardDescription>Click on a cell to edit its value.</CardDescription>
+                      <CardDescription>Click on a cell or header to edit its value.</CardDescription>
                     </CardHeader>
                     <CardContent>
                       <div className="relative w-full overflow-auto rounded-md border">
                         <Table>
                           <TableHeader>
                             <TableRow>
-                              {spreadsheetHeaders.map(header => <TableHead key={header}>{header}</TableHead>)}
+                              {spreadsheetHeaders.map(header => (
+                                <TableHead key={header}>
+                                   <Input
+                                    type="text"
+                                    defaultValue={header}
+                                    onBlur={(e) => handleHeaderChange(header, e.target.value)}
+                                    className="h-8 border-transparent font-bold focus:border-ring focus:bg-secondary"
+                                    disabled={!isSpreadsheet}
+                                  />
+                                </TableHead>
+                              ))}
                             </TableRow>
                           </TableHeader>
                           <TableBody>
@@ -278,7 +342,7 @@ export function Workspace() {
                         </CardContent>
                         <CardFooter>
                             <Button onClick={handleManipulateData} disabled={isProcessing || !isSpreadsheet} className="w-full">
-                                {isProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2" />}
+                                {isProcessing ? <Loader2 className="animate-spin" /> : <Sparkles />}
                                 Apply Manipulation
                             </Button>
                         </CardFooter>
@@ -292,3 +356,5 @@ export function Workspace() {
     </div>
   )
 }
+
+    
