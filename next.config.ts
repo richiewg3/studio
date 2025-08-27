@@ -25,8 +25,6 @@ const nextConfig: NextConfig = {
       },
     ],
   },
-  output: 'export',
-  basePath: '/studio',
 };
 
 export default nextConfig;
